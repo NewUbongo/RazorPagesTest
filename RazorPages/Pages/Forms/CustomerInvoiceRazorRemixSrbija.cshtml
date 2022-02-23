@@ -1,0 +1,308 @@
+﻿@page
+@using System.Configuration
+@using System.Net.Http
+@using Newtonsoft.Json.Linq
+@using System.Globalization;
+@{
+
+    JObject jObjectDelivery;
+    JArray jArrayDeliveryItems = new JArray();
+
+    string billingFullName = "_______________";
+    string billingStreet = "_______________";
+    string billingPostCode = "_______________";
+    string billingCity = "_______________";
+
+    string shippingFullName = "_______________";
+    string shippingStreet = "_______________";
+    string shippingPostCode = "_______________";
+    string shippingCity = "_______________";
+    string shippingTelephone = "_______________";
+
+    string sellerTelephone = "_______________";
+    string sellerEmail = "_______________";
+
+    string deliveryNumber = "_______________";
+
+    decimal creditNote = 0;
+    decimal forPay = 0;
+    decimal forPayment = 0;
+    decimal deliveryPrice = 0;
+    decimal deliveryPriceWithoutTaxRate = 0;
+}
+@using (HttpClient client = new HttpClient())
+{
+    string platformaURL = "http://localhost:62469";
+
+    string url = platformaURL + "/api/delivery/getWithItemsAndOrderItems?id=" + 529651;
+
+    HttpResponseMessage response = client.GetAsync(url).Result;
+
+    if (!response.IsSuccessStatusCode)
+    {
+        throw new Exception("Platforma server is not available!");
+    }
+
+    HttpContent responseContent = response.Content;
+
+    string json = responseContent.ReadAsStringAsync().Result;
+
+    jObjectDelivery = JObject.Parse(json);
+
+    deliveryNumber = (string)jObjectDelivery["deliveryNumber"];
+
+    var cnToken = jObjectDelivery["creditNote"];
+    creditNote = cnToken.Type == JTokenType.Null ? 0
+        : Convert.ToDecimal(cnToken);
+
+    deliveryPrice = (decimal)jObjectDelivery["deliveryPrice"];
+
+    deliveryPriceWithoutTaxRate = deliveryPrice - (deliveryPrice / 120 * 20);
+
+    billingFullName = (string)jObjectDelivery["order"]["billingParty"]["firstName"] + " " + (string)jObjectDelivery["order"]["billingParty"]["lastName"];
+    billingStreet = (string)jObjectDelivery["order"]["billingParty"]["street"];
+    billingPostCode = (string)jObjectDelivery["order"]["billingParty"]["zipCode"];
+    billingCity = (string)jObjectDelivery["order"]["billingParty"]["city"];
+
+    shippingFullName = (string)jObjectDelivery["order"]["shippingParty"]["firstName"] + " " + (string)jObjectDelivery["order"]["shippingParty"]["lastName"];
+    shippingStreet = (string)jObjectDelivery["order"]["billingParty"]["street"];
+    shippingPostCode = (string)jObjectDelivery["order"]["billingParty"]["zipCode"];
+    shippingCity = (string)jObjectDelivery["order"]["billingParty"]["city"];
+    shippingTelephone = (string)jObjectDelivery["order"]["billingParty"]["phoneNo"];
+
+    sellerTelephone = (string)jObjectDelivery["order"]["siteDomain"]["infoNumber"];
+    sellerEmail = (string)jObjectDelivery["order"]["siteDomain"]["infoEmail"];
+
+    jArrayDeliveryItems = (JArray)jObjectDelivery["deliveryItem"];
+
+}
+
+    <html>
+    <body bgcolor=white lang=EN-US>
+        <table align="center" border="0" width="100%" class="body-table" style="font-family: ''Montserrat-Regular''; border-collapse: collapse;">
+            <tr>
+                <td style="font-size: 11px; width: 250px; border-right: 1px solid #333; padding: 3px 0 15px;">
+                    <div style="padding-bottom: 8px;">Kupac</div>
+                    <div style="font-size: 10px; font-family: ''Montserrat-Regular''; width: 200px; height: 70px; padding: 15px 0 4px; border: 1px solid #333; text-align: center; line-height: 18px;">
+                        @billingFullName <br> @billingStreet <br> @billingPostCode @billingCity
+                    </div>
+                </td>
+                <td style="font-size: 11px; padding: 3px 0 15px 50px; vertical-align: top;">
+                    <div style="padding-bottom: 8px;">Primalac/Mesto i adresa isporuke robe</div>
+                    <div style="font-size: 10px; font-family: ''Montserrat-Regular''; width: 200px; height: 70px; padding: 9px 0 10; border: 1px solid #333; text-align: center; line-height: 18px;">
+                        @shippingFullName <br> @shippingStreet <br> @shippingPostCode @shippingCity <br> @shippingTelephone
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" style="text-align: center; font-size: 22px; margin: 40px auto 0; padding-top: 30px; font-family: ''Montserrat-Bold'';">
+                    Račun-otpremnica: @deliveryNumber
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" style="text-align: center; font-size: 14px; margin: 8px auto 40px; padding-bottom: 30px;">
+                    Mesto i datum izdavanja: Beograd, @DateTime.Now.ToString("dd.MM.yyyy.")
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <table align="center" width="100%" style="text-align: center; border-collapse: collapse; font-size: 10px;">
+                        <tr>
+                            <td style="width: 20px; border: 1px solid #333;">#</td>
+                            <td style="width: 70px; border: 1px solid #333;">Šifra artikla</td>
+                            <td style="width: 100px; border: 1px solid #333;">Naziv artikla</td>
+                            <td style="width: 40px; border: 1px solid #333;">Količina</td>
+                            <td style="width: 50px; border: 1px solid #333;">Jedinica mere</td>
+                            <td style="width: 70px; border: 1px solid #333;">Prodajna cena po JM</td>
+                            <td style="width: 70px; border: 1px solid #333;">Poreska osnovica</td>
+                            <td style="width: 40px; border: 1px solid #333;">PDV %</td>
+                            <td style="width: 60px; border: 1px solid #333;">Iznos <br> PDV</td>
+                            <td style="width: 70px; border: 1px solid #333;">Ukupno</td>
+                        </tr>
+                        @{
+                            int count = 0;
+                            string itemCode;
+                            string itemName;
+                            string itemSize;
+                            decimal itemQuantity;
+                            string measureUnit;
+                            decimal retailPrice;
+                            decimal taxRate;
+                            decimal taxAmount;
+                            decimal retailPriceWithoutTax;
+                            decimal totalPrice = 0;
+                            decimal grandTotalPrice = 0;
+                            int itemNameLength = 0;
+                            int itemCodeLength = 0;
+                            string itemName1;
+                            string itemName2 = "";
+
+
+                            foreach (var jObjectDeliveryItem in jArrayDeliveryItems)
+                            {
+                                itemQuantity = (decimal)jObjectDeliveryItem["quantityProvided"];
+
+                                if (itemQuantity == 0)
+                                {
+                                    continue;
+                                }
+
+                                count++;
+                                itemCode = (string)jObjectDeliveryItem["orderItem"]["code"];
+                                itemName = (string)jObjectDeliveryItem["orderItem"]["name"];
+                                itemSize = (string)jObjectDeliveryItem["orderItem"]["size"];
+                                measureUnit = (string)jObjectDeliveryItem["orderItem"]["measureUnit"]["name"];
+                                retailPrice = (decimal)jObjectDeliveryItem["orderItem"]["retailPrice"];
+                                taxRate = (decimal)jObjectDeliveryItem["orderItem"]["taxRate"];
+                                taxAmount = retailPrice / (100 + taxRate) * taxRate;
+                                retailPriceWithoutTax = retailPrice - taxAmount;
+                                totalPrice = retailPrice * itemQuantity;
+                                grandTotalPrice += totalPrice;
+
+                                itemNameLength = itemName.Length;
+                                itemCodeLength = itemCode.Length;
+
+                                itemName1 = itemNameLength > itemCodeLength + 3
+                                    ? itemName.Remove(itemNameLength - (itemCodeLength + 3))
+                                    : itemName;
+
+                                if (itemName1.Length > 21)
+                                {
+                                    itemName2 = itemName1.Remove(itemName1.Length - (itemName1.Length - 21 + 3));
+                                    itemName2 += "...";
+                                }
+                                else
+                                {
+                                    itemName2 = itemName1;
+                                }
+                                <tr>
+                                    <td style="width: 20px; border: 1px solid #333;">@count</td>
+                                    <td style="width: 70px; border: 1px solid #333;">@itemCode</td>
+                                    <td style="width: 100px; border: 1px solid #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @itemName2
+
+                                        @if (itemSize != null)
+                                        {
+                                            <br> <span>Velicina: @itemSize</span>
+                                        }
+
+                                    </td>
+
+                                    <td style="width: 40px; border: 1px solid #333;">@itemQuantity</td>
+                                    <td style="width: 50px; border: 1px solid #333;">@measureUnit</td>
+                                    <td style="width: 70px; border: 1px solid #333;">@retailPrice.ToString("#,##0.00")</td>
+                                    <td style="width: 70px; border: 1px solid #333;">@retailPriceWithoutTax.ToString("#,##0.00")</td>
+                                    <td style="width: 40px; border: 1px solid #333;">@taxRate.ToString()%</td>
+                                    <td style="width: 60px; border: 1px solid #333;">@taxAmount.ToString("#,##0.00")</td>
+                                    <td style="width: 70px; border: 1px solid #333;">@totalPrice.ToString("#,##0.00")</td>
+                                </tr>
+                            }
+
+                            forPayment = grandTotalPrice + deliveryPrice;
+                            forPay = forPayment - creditNote;
+
+                            <tr>
+                                <td colspan="9"></td>
+                                <td style="width: 90px; height: 25px; line-height: 25px; border: 1px solid #333;">@grandTotalPrice.ToString("#,##0.00")</td>
+                            </tr>
+                        }
+                    </table>
+                </td>
+            </tr>
+
+            <tr width="100%" style="margin-top:30px;">
+                <td colspan="2">
+                    <table align="center" width="100%" style="text-align: center; border-collapse: collapse; font-size: 11px;">
+
+                        <tr>
+                            <td>
+                                <table align="left" style="border-collapse: collapse;">
+                                    <tr>
+                                        <td style="width: 100px;">Cena isporuke</td>
+                                        <td style="width: 60px;">PDV %</td>
+                                        <td style="width: 90px;">Cena sa PDV</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="border: 1px solid black; padding: 7px 12px">@deliveryPriceWithoutTaxRate.ToString("#,##0.00")</td>
+                                        <td style="border: 1px solid black; padding: 7px 12px">20</td>
+                                        <td style="border: 1px solid black; padding: 7px 12px">@deliveryPrice.ToString("#,##0.00")</td>
+                                    </tr>
+
+                                </table>
+                            </td>
+                            <td>
+                                <table align="right" style="width: 90px; font-size: 11px;">
+                                    <tr>
+                                        <td style="padding-top: 20px; vertical-align: bottom;">
+                                            ZA UPLATU:
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px 12px; border: 1px solid black;">
+                                            @forPayment.ToString("#,##0.00")
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td colspan="1"></td>
+                            <td>
+                                <table align="right" style="width: 90px; font-size: 11px;">
+                                    <tr>
+                                        <td style="padding-top: 10px; vertical-align: bottom;">
+                                            PLAĆENO:
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px 12px; border: 1px solid black;">
+                                            @creditNote.ToString("#,##0.00")
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td colspan="1"></td>
+                            <td>
+                                <table align="right" style="width: 90px; font-size: 11px;">
+                                    <tr>
+                                        <td style="padding-top: 10px; vertical-align: bottom;">
+                                            RAZLIKA ZA <br> PLAĆANJE:
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px 12px; border: 1px solid black;">
+                                            @forPay.ToString("#,##0.00")
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" style="font-size: 10px; text-align: center; padding-top: 35px; letter-spacing: .2px;">
+                    U skladu sa Zakonom o zaštiti potrošača, imate pravo povrata u roku od 14 dana od momenta dostave, <br>
+                    bez navođenja razloga za odustanak od ugovora. U ovom slučaju, potrebno je da nas obavestite putem mail adrese <br>
+                    @sellerEmail ili call centra @sellerTelephone.
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" style="padding-top: 50px;">
+                    <table width="100%">
+                        <tr>
+                            <td style="text-align: center; width: 35%; font-size: 12px; margin-top: 50px; padding-top: 2.5px; border-top: 1.5px solid #333;">Dokument sačinio</td>
+                            <td style="width: 30%;"></td>
+                            <td style="text-align: center; width: 35%; font-size: 12px; margin-top: 50px; padding-top: 2.5px; border-top: 1.5px solid #333;">Robu primio</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+    </body>
+</html>
+
